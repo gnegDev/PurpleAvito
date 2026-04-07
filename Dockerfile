@@ -11,6 +11,7 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 
 COPY app/ ./app/
 COPY datasets/ ./datasets/
+COPY frontend/ ./frontend/
 
 EXPOSE 8080
 
