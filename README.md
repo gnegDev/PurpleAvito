@@ -27,14 +27,14 @@ cp .env.example .env
 # Отредактировать .env — добавить LLM_API_KEY
 
 # 3. Запустить
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ### С Docker
 
 ```bash
 docker build -t avito-splitter .
-docker run --env-file .env -p 8000:8000 avito-splitter
+docker run --env-file .env -p 8080:8080 avito-splitter
 ```
 
 ### Настройка `.env`
@@ -49,8 +49,8 @@ LLM_API_KEY=your_key_here
 
 | Адрес | Описание |
 |---|---|
-| `http://localhost:8000/` | Веб-интерфейс для ручного тестирования |
-| `http://localhost:8000/docs` | Swagger UI (автодокументация API) |
+| `http://localhost:8080/` | Веб-интерфейс для ручного тестирования |
+| `http://localhost:8080/docs` | Swagger UI (автодокументация API) |
 
 ---
 
@@ -61,7 +61,7 @@ LLM_API_KEY=your_key_here
         │
         ▼
 ┌───────────────────────────────┐
-│  Шаг 1 — Поиск кандидатов    │  (без LLM)
+│  Шаг 1 — Поиск кандидатов     │  (без LLM)
 │                               │
 │  • Keyword matching:          │
 │    ищем ключевые фразы        │
@@ -83,7 +83,7 @@ LLM_API_KEY=your_key_here
                 │
                 ▼
 ┌───────────────────────────────┐
-│  Шаг 2 — LLM классификация   │
+│  Шаг 2 — LLM классификация    │
 │                               │
 │  Yandex Cloud LLM определяет: │
 │  • detectedMcIds — все        │
