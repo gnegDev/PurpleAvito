@@ -1,9 +1,12 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import pipeline
 from app.data_loader import load_dataset, load_microcategories
@@ -56,6 +59,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+_FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+app.mount("/static", StaticFiles(directory=_FRONTEND_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return FileResponse(_FRONTEND_DIR / "index.html")
 
 
 @app.get("/health", response_model=HealthResponse)

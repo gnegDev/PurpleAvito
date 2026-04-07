@@ -1,60 +1,186 @@
 # Avito Service Splitter
 
-Автоматическое выделение самостоятельных услуг из объявлений и генерация черновиков.
+Сервис для автоматического выявления самостоятельных услуг в объявлениях и генерации черновиков.
+Решение для хакатона **IT Purple × Авито 2025**, категория «Ремонт и отделка».
 
-## Установка зависимостей
+---
+
+## Системные требования
+
+- Python 3.11+ (разработано и протестировано на 3.14)
+- Или Docker
+- ~500 МБ свободного места (embedding-модель ~120 МБ)
+- Доступ к Yandex Cloud LLM API
+
+---
+
+## Быстрый старт
+
+### Без Docker
 
 ```bash
+# 1. Установить зависимости
 pip install -r requirements.txt
-```
 
-## Настройка .env
-
-Скопируй `.env.example` в `.env` и заполни ключ:
-
-```bash
+# 2. Создать .env
 cp .env.example .env
-```
+# Отредактировать .env — добавить LLM_API_KEY
 
-Отредактируй `.env`:
-```
-LLM_API_KEY=your_actual_key_here
-```
-
-## Запуск
-
-```bash
+# 3. Запустить
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Документация API доступна по адресу: http://localhost:8000/docs
+### С Docker
 
-## Endpoints
+```bash
+docker build -t avito-splitter .
+docker run --env-file .env -p 8000:8000 avito-splitter
+```
 
-### GET /health
+### Настройка `.env`
+
+```
+LLM_API_KEY=your_key_here
+```
+
+---
+
+## Интерфейсы
+
+| Адрес | Описание |
+|---|---|
+| `http://localhost:8000/` | Веб-интерфейс для ручного тестирования |
+| `http://localhost:8000/docs` | Swagger UI (автодокументация API) |
+
+---
+
+## Логика пайплайна
+
+```
+Входное объявление
+        │
+        ▼
+┌───────────────────────────────┐
+│  Шаг 1 — Поиск кандидатов    │  (без LLM)
+│                               │
+│  • Keyword matching:          │
+│    ищем ключевые фразы        │
+│    каждой микрокатегории      │
+│    в тексте объявления        │
+│                               │
+│  • Embedding similarity:      │
+│    paraphrase-multilingual-   │
+│    MiniLM-L12-v2              │
+│    (предвычисляется при       │
+│    старте сервиса)            │
+│                               │
+│  Кандидат включается если:    │
+│  keyword_score > 0            │
+│  ИЛИ embedding_sim > 0.38     │
+│                               │
+│  → Топ-10 кандидатов          │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│  Шаг 2 — LLM классификация   │
+│                               │
+│  Yandex Cloud LLM определяет: │
+│  • detectedMcIds — все        │
+│    упомянутые микрокатегории  │
+│  • shouldSplit — нужен ли     │
+│    сплит                      │
+│  • independentMcIds —         │
+│    самостоятельные услуги     │
+│                               │
+│  При недоступности LLM →      │
+│  fallback: shouldSplit=false  │
+└───────────────┬───────────────┘
+                │ (только если shouldSplit=true)
+                ▼
+┌───────────────────────────────┐
+│  Шаг 3 — Генерация черновиков │
+│                               │
+│  LLM создаёт текст 50–100     │
+│  слов для каждой              │
+│  независимой услуги           │
+└───────────────────────────────┘
+```
+
+---
+
+## API Endpoints
+
+### `GET /health`
 Статус сервиса и количество загруженных микрокатегорий.
 
-### POST /analyze
-Анализирует объявление и возвращает детектированные микрокатегории, решение о сплите и черновики.
+### `POST /analyze`
+Анализирует объявление.
 
+**Запрос:**
 ```json
 {
   "itemId": 5001,
-  "mcId": 201,
-  "mcTitle": "Ремонт квартир под ключ",
+  "mcId": 101,
+  "mcTitle": "Ремонт квартир и домов под ключ",
   "description": "Текст объявления..."
 }
 ```
 
-### POST /evaluate
-Запускает пайплайн на `limit` записях датасета и считает метрики (precision, recall, F1, accuracy по shouldSplit).
-
+**Ответ:**
 ```json
-{"limit": 50}
+{
+  "itemId": 5001,
+  "detectedMcIds": [102, 103],
+  "shouldSplit": true,
+  "drafts": [
+    {"mcId": 102, "mcTitle": "Сантехника", "text": "..."}
+  ],
+  "reasoning": "...",
+  "debug": {"candidatesFound": 4, "independentMcIds": [102, 103]}
+}
 ```
 
-## Архитектура
+### `POST /evaluate`
+Запускает пайплайн на выборке из датасета и считает метрики.
 
-1. **Шаг 1 — Keyword + Embedding matching** (`matching.py`): ищет кандидатов микрокатегорий через ключевые фразы и косинусное сходство embeddings (paraphrase-multilingual-MiniLM-L12-v2).
-2. **Шаг 2 — LLM классификация** (`llm.py`): определяет, какие микрокатегории упомянуты самостоятельно, через Yandex Cloud LLM.
-3. **Шаг 3 — Генерация черновиков** (`llm.py`): создаёт тексты для каждой самостоятельной микрокатегории (только если `shouldSplit=true`).
+**Запрос:** `{"limit": 50}`
+
+**Ответ:**
+```json
+{
+  "precision": 0.82,
+  "recall": 0.75,
+  "f1": 0.78,
+  "shouldSplitAccuracy": 0.88,
+  "totalItems": 50,
+  "details": [...]
+}
+```
+
+**Метрики:**
+- **Precision / Recall / F1** — micro-average по `independentMcIds` vs `targetSplitMcIds`
+- **shouldSplitAccuracy** — доля верно предсказанных `shouldSplit`
+- Исходная микрокатегория объявления в расчёт не включается
+
+---
+
+## Структура проекта
+
+```
+├── app/
+│   ├── main.py        — FastAPI: роуты, lifespan, раздача фронтенда
+│   ├── pipeline.py    — оркестрация шагов 1 → 2 → 3
+│   ├── matching.py    — keyword + embedding matching (класс Matcher)
+│   ├── llm.py         — вызовы LLM (classify, generate_drafts)
+│   ├── models.py      — Pydantic-модели запросов и ответов
+│   └── data_loader.py — загрузка справочника и датасета
+├── frontend/
+│   └── index.html     — веб-интерфейс (vanilla JS, без зависимостей)
+├── datasets/
+│   ├── rnc_mic_key_phrases.csv   — справочник 11 микрокатегорий
+│   └── rnc_dataset_markup.json  — 2480 объявлений с эталонной разметкой
+├── Dockerfile
+├── .env.example
+└── requirements.txt
+```

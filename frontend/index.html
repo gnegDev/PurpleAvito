@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avito Service Splitter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --primary: #00aaff;
+      --primary-dark: #0088dd;
+      --success: #27ae60;
+      --error: #e74c3c;
+      --warn: #f39c12;
+      --text: #1a1a2e;
+      --muted: #6b7280;
+      --radius: 10px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 { font-size: 18px; font-weight: 700; }
+    header span { font-size: 13px; color: var(--muted); }
+
+    #health-badge {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--border);
+      transition: background .3s;
+    }
+    .dot.ok  { background: var(--success); }
+    .dot.err { background: var(--error); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      background: #fafafa;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      transition: color .2s, border-color .2s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    .tab-content { display: none; padding: 20px; }
+    .tab-content.active { display: block; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+      margin-top: 14px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    label:first-child { margin-top: 0; }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      transition: border-color .2s;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    button.submit {
+      margin-top: 18px;
+      width: 100%;
+      padding: 11px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    button.submit:hover { background: var(--primary-dark); }
+    button.submit:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* Result panel */
+    .result-panel { display: flex; flex-direction: column; }
+
+    .result-toolbar {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fafafa;
+      min-height: 48px;
+    }
+
+    .result-toolbar .status-tag {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: .3px;
+    }
+    .tag-ok   { background: #d4edda; color: #155724; }
+    .tag-err  { background: #f8d7da; color: #721c24; }
+    .tag-info { background: #d1ecf1; color: #0c5460; }
+
+    .result-toolbar .elapsed { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+    .result-body { flex: 1; overflow: auto; padding: 20px; }
+
+    /* Pretty JSON */
+    pre.json-out {
+      font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .j-key    { color: #2c7be5; }
+    .j-str    { color: #0ea271; }
+    .j-num    { color: #e67e22; }
+    .j-bool   { color: #8e44ad; font-weight: 600; }
+    .j-null   { color: var(--muted); font-style: italic; }
+
+    /* Summary cards */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .metric-card .val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .metric-card .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .split-yes { color: var(--success); font-weight: 700; }
+    .split-no  { color: var(--muted); }
+
+    /* Details table */
+    .details-wrap { overflow-x: auto; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #f1f3f5;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green { background: #d4edda; color: #155724; }
+    .badge-red   { background: #f8d7da; color: #721c24; }
+    .badge-grey  { background: #e9ecef; color: #495057; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-state svg { opacity: .25; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* Drafts cards */
+    .drafts-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+    .draft-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .draft-card h4 { font-size: 13px; color: var(--primary); margin-bottom: 6px; }
+    .draft-card p  { font-size: 14px; line-height: 1.55; color: var(--text); }
+
+    .mc-pill {
+      display: inline-block;
+      background: #e8f4fd;
+      color: #1a6fa8;
+      border-radius: 12px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 2px 3px 2px 0;
+    }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+    <rect width="28" height="28" rx="7" fill="#00aaff"/>
+    <path d="M8 20V10l6-4 6 4v10l-6 3-6-3z" fill="white" opacity=".9"/>
+    <circle cx="14" cy="14" r="3" fill="#00aaff"/>
+  </svg>
+  <h1>Avito Service Splitter</h1>
+  <span>Хакатон IT Purple 2025</span>
+  <div id="health-badge">
+    <div class="dot" id="health-dot"></div>
+    <span id="health-text">проверка...</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Left: forms -->
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="analyze">Анализ</button>
+      <button class="tab" data-tab="evaluate">Оценка</button>
+    </div>
+
+    <!-- ANALYZE -->
+    <div class="tab-content active" id="tab-analyze">
+      <label>Item ID</label>
+      <input type="number" id="a-itemId" value="5001" />
+
+      <div class="row2">
+        <div>
+          <label>mc ID</label>
+          <input type="number" id="a-mcId" value="101" />
+        </div>
+        <div>
+          <label>Пресет</label>
+          <select id="a-preset" onchange="applyPreset()">
+            <option value="">— выбрать —</option>
+            <option value="turnkey_split">Ремонт + доп. услуги</option>
+            <option value="single">Только сантехника</option>
+            <option value="electric">Электрика + потолки</option>
+          </select>
+        </div>
+      </div>
+
+      <label>mc Title</label>
+      <input type="text" id="a-mcTitle" value="Ремонт квартир и домов под ключ" />
+
+      <label>Текст объявления</label>
+      <textarea id="a-description">Делаем ремонт квартир под ключ. Отдельно выполняем сантехнические работы: разводка труб, замена смесителей, установка унитазов. Также отдельно — электрика: замена проводки, установка розеток и выключателей.</textarea>
+
+      <button class="submit" id="btn-analyze" onclick="doAnalyze()">Анализировать</button>
+    </div>
+
+    <!-- EVALUATE -->
+    <div class="tab-content" id="tab-evaluate">
+      <label>Количество записей из датасета</label>
+      <input type="number" id="e-limit" value="20" min="1" max="500" />
+      <p style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5">
+        Запускает пайплайн на N записях датасета и считает метрики:<br>
+        Precision, Recall, F1 micro по independentMcIds;<br>
+        Accuracy по shouldSplit.
+      </p>
+      <button class="submit" id="btn-evaluate" onclick="doEvaluate()">Запустить оценку</button>
+    </div>
+  </div>
+
+  <!-- Right: result -->
+  <div class="panel result-panel">
+    <div class="result-toolbar" id="result-toolbar">
+      <span style="font-size:13px;color:var(--muted)">Результат появится здесь</span>
+    </div>
+    <div class="result-body" id="result-body">
+      <div class="empty-state">
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+          <rect x="10" y="10" width="36" height="36" rx="8" stroke="#9ca3af" stroke-width="2.5"/>
+          <path d="M20 28h16M20 22h10M20 34h8" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p>Заполните форму слева и нажмите кнопку</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = '';  // same origin
+
+  // --- Health check ---
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${BASE}/health`);
+      const d = await r.json();
+      document.getElementById('health-dot').className = 'dot ok';
+      document.getElementById('health-text').textContent =
+        `OK · ${d.microcategoriesLoaded} микрокатегорий`;
+    } catch {
+      document.getElementById('health-dot').className = 'dot err';
+      document.getElementById('health-text').textContent = 'недоступен';
+    }
+  }
+  checkHealth();
+  setInterval(checkHealth, 15000);
+
+  // --- Tabs ---
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // --- Presets ---
+  const presets = {
+    turnkey_split: {
+      mcId: 101, mcTitle: 'Ремонт квартир и домов под ключ',
+      description: 'Делаем ремонт квартир под ключ. Отдельно выполняем сантехнические работы: разводка труб, замена смесителей, установка унитазов. Также отдельно — электрика: замена проводки, установка розеток и выключателей.'
+    },
+    single: {
+      mcId: 102, mcTitle: 'Сантехника',
+      description: 'Профессиональный сантехник. Разводка труб, установка унитазов, раковин, ванн. Замена смесителей, полотенцесушителей. Устранение протечек.'
+    },
+    electric: {
+      mcId: 103, mcTitle: 'Электрика',
+      description: 'Выполняем электромонтажные работы: замена проводки, установка розеток, сборка щита. Отдельно устанавливаем натяжные потолки с подсветкой — любые виды, монтаж за 1 день.'
+    }
+  };
+
+  function applyPreset() {
+    const key = document.getElementById('a-preset').value;
+    if (!key || !presets[key]) return;
+    const p = presets[key];
+    document.getElementById('a-mcId').value = p.mcId;
+    document.getElementById('a-mcTitle').value = p.mcTitle;
+    document.getElementById('a-description').value = p.description;
+  }
+
+  // --- Helpers ---
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Загрузка...' : (btnId === 'btn-analyze' ? 'Анализировать' : 'Запустить оценку');
+  }
+
+  function setToolbar(html) {
+    document.getElementById('result-toolbar').innerHTML = html;
+  }
+
+  function setBody(html) {
+    document.getElementById('result-body').innerHTML = html;
+  }
+
+  function elapsed(ms) {
+    return ms < 1000 ? `${ms} мс` : `${(ms/1000).toFixed(1)} с`;
+  }
+
+  // Syntax-highlight JSON
+  function highlight(obj) {
+    const json = JSON.stringify(obj, null, 2);
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) return `<span class="j-key">${match}</span>`;
+        return `<span class="j-str">${match}</span>`;
+      }
+      if (/true|false/.test(match)) return `<span class="j-bool">${match}</span>`;
+      if (/null/.test(match))       return `<span class="j-null">${match}</span>`;
+      return `<span class="j-num">${match}</span>`;
+    });
+  }
+
+  // --- Analyze ---
+  async function doAnalyze() {
+    const body = {
+      itemId:      parseInt(document.getElementById('a-itemId').value) || 0,
+      mcId:        parseInt(document.getElementById('a-mcId').value) || 0,
+      mcTitle:     document.getElementById('a-mcTitle').value.trim(),
+      description: document.getElementById('a-description').value.trim(),
+    };
+
+    setLoading('btn-analyze', true);
+    setToolbar(`<div class="spinner"></div><span style="font-size:13px;color:var(--muted);margin-left:10px">Выполняется запрос...</span>`);
+    setBody('');
+
+    const t0 = Date.now();
+    let data, ok;
+    try {
+      const r = await fetch(`${BASE}/analyze`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      data = await r.json();
+      ok = r.ok;
+    } catch(e) {
+      setToolbar(`<span class="status-tag tag-err">Ошибка сети</span><span class="elapsed">${elapsed(Date.now()-t0)}</span>`);
+      setBody(`<pre style="color:var(--error);padding:20px">${e.message}</pre>`);
+      setLoading('btn-analyze', false);
+      return;
+    }
+    const ms = Date.now() - t0;
+
+    // toolbar
+    const splitTag = data.shouldSplit
+      ? `<span class="status-tag tag-ok">Нужен сплит</span>`
+      : `<span class="status-tag tag-info">Сплит не нужен</span>`;
+    setToolbar(`
+      <span class="status-tag ${ok ? 'tag-ok' : 'tag-err'}">${ok ? '200 OK' : 'Ошибка'}</span>
+      ${splitTag}
+      <span class="elapsed">${elapsed(ms)}</span>
+    `);
+
+    if (!ok) {
+      setBody(`<pre class="json-out" style="padding:20px">${highlight(data)}</pre>`);
+      setLoading('btn-analyze', false);
+      return;
+    }
+
+    // Detected mc pills
+    const detectedPills = (data.detectedMcIds || []).map(id =>
+      `<span class="mc-pill">#${id}</span>`).join('');
+
+    // Drafts
+    let draftsHtml = '';
+    if (data.drafts && data.drafts.length > 0) {
+      draftsHtml = `
+        <div style="margin-top:20px">
+          <div class="panel-header" style="padding:0 0 8px 0;background:none;border:none">Черновики (${data.drafts.length})</div>
+          <div class="drafts-list">
+            ${data.drafts.map(d => `
+              <div class="draft-card">
+                <h4>#${d.mcId} — ${escHtml(d.mcTitle)}</h4>
+                <p>${escHtml(d.text)}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    setBody(`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px">Найденные микрокатегории</div>
+          <div>${detectedPills || '<span style="color:var(--muted);font-size:13px">не найдено</span>'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px">Самостоятельные услуги</div>
+          <div>${(data.debug?.independentMcIds || []).map(id => `<span class="mc-pill">#${id}</span>`).join('') || '<span style="color:var(--muted);font-size:13px">нет</span>'}</div>
+        </div>
+      </div>
+
+      ${data.reasoning ? `
+        <div style="background:#f8f9fa;border-left:3px solid var(--primary);padding:10px 14px;border-radius:4px;font-size:13px;line-height:1.55;color:var(--text);margin-bottom:20px">
+          <strong>Обоснование:</strong> ${escHtml(data.reasoning)}
+        </div>
+      ` : ''}
+
+      ${draftsHtml}
+
+      <details style="margin-top:20px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--muted);user-select:none">Полный JSON ответа</summary>
+        <pre class="json-out" style="margin-top:10px;padding:14px;background:#f8f9fa;border-radius:8px;overflow:auto">${highlight(data)}</pre>
+      </details>
+    `);
+
+    setLoading('btn-analyze', false);
+  }
+
+  // --- Evaluate ---
+  async function doEvaluate() {
+    const limit = parseInt(document.getElementById('e-limit').value) || 20;
+
+    setLoading('btn-evaluate', true);
+    setToolbar(`<div class="spinner"></div><span style="font-size:13px;color:var(--muted);margin-left:10px">Оценка на ${limit} записях...</span>`);
+    setBody('');
+
+    const t0 = Date.now();
+    let data, ok;
+    try {
+      const r = await fetch(`${BASE}/evaluate`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ limit }),
+      });
+      data = await r.json();
+      ok = r.ok;
+    } catch(e) {
+      setToolbar(`<span class="status-tag tag-err">Ошибка сети</span>`);
+      setBody(`<pre style="color:var(--error);padding:20px">${e.message}</pre>`);
+      setLoading('btn-evaluate', false);
+      return;
+    }
+    const ms = Date.now() - t0;
+
+    setToolbar(`
+      <span class="status-tag ${ok ? 'tag-ok' : 'tag-err'}">${ok ? '200 OK' : 'Ошибка'}</span>
+      <span style="font-size:13px;color:var(--muted)">n=${data.totalItems}</span>
+      <span class="elapsed">${elapsed(ms)}</span>
+    `);
+
+    if (!ok) {
+      setBody(`<pre class="json-out" style="padding:20px">${highlight(data)}</pre>`);
+      setLoading('btn-evaluate', false);
+      return;
+    }
+
+    // Metrics cards
+    const metrics = [
+      { val: fmt(data.precision), lbl: 'Precision' },
+      { val: fmt(data.recall),    lbl: 'Recall' },
+      { val: fmt(data.f1),        lbl: 'F1-score' },
+      { val: fmt(data.shouldSplitAccuracy), lbl: 'Split Accuracy' },
+    ];
+    const cards = metrics.map(m => `
+      <div class="metric-card">
+        <div class="val">${m.val}</div>
+        <div class="lbl">${m.lbl}</div>
+      </div>
+    `).join('');
+
+    // Details table
+    const rows = (data.details || []).map(d => {
+      const splitMatch = d.predicted_shouldSplit === d.actual_shouldSplit;
+      return `
+        <tr>
+          <td>${d.itemId}</td>
+          <td>${d.predicted_independentMcIds.map(id => `<span class="mc-pill">#${id}</span>`).join('') || '—'}</td>
+          <td>${d.actual_splitMcIds.map(id => `<span class="mc-pill">#${id}</span>`).join('') || '—'}</td>
+          <td><span class="badge badge-green">TP:${d.tp}</span> <span class="badge badge-red">FP:${d.fp}</span> <span class="badge badge-grey">FN:${d.fn}</span></td>
+          <td><span class="badge ${splitMatch ? 'badge-green' : 'badge-red'}">${d.predicted_shouldSplit ? 'да' : 'нет'} / ${d.actual_shouldSplit ? 'да' : 'нет'}</span></td>
+        </tr>
+      `;
+    }).join('');
+
+    setBody(`
+      <div class="summary-cards">${cards}</div>
+
+      <div class="details-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item ID</th>
+              <th>Предсказано (independentMcIds)</th>
+              <th>Эталон (splitMcIds)</th>
+              <th>TP / FP / FN</th>
+              <th>Split (пред / факт)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `);
+
+    setLoading('btn-evaluate', false);
+  }
+
+  function fmt(v) { return (v * 100).toFixed(1) + '%'; }
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
