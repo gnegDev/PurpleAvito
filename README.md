@@ -6,6 +6,8 @@
 > [!WARNING]  
 > В связи с тем, что решение полагается на Yandex Cloud AI Assistants с уже настроенными агентами, для запуска вам потребуется определенный API-ключ (YANDEX_CLOUD_AI_STUDIOS_KEY). Свяжитесь с нами для его получения.
 
+<img alt="PurpleAvito" src="https://github.com/user-attachments/assets/625f3d7d-5a60-4a74-b358-635a80e02851" />
+
 ---
 
 ## Системные требования
