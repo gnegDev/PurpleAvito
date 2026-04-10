@@ -190,10 +190,12 @@ python run_test.py
 │   ├── models.py      — Pydantic-модели запросов и ответов
 │   └── data_loader.py — загрузка справочника и датасета
 ├── frontend/
-│   └── index.html     — веб-интерфейс (vanilla JS, без зависимостей)
+│   └── index.html — веб-интерфейс (vanilla JS, без зависимостей)
 ├── datasets/
-│   ├── rnc_mic_key_phrases.csv   — справочник 11 микрокатегорий
-│   └── rnc_dataset_markup.json  — 2480 объявлений с эталонной разметкой
+│   ├── rnc_mic_key_phrases.csv — справочник 11 микрокатегорий
+│   └── rnc_dataset_markup.json — 2480 объявлений с эталонной разметкой
+├── target/
+│   └── rnc_test.csv — 159 тестовых запросов и ответов сервера 
 ├── Dockerfile
 ├── .env.example
 └── requirements.txt
